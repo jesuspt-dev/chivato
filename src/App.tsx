@@ -15,14 +15,18 @@ import {
   Sun,
   Moon,
   Menu,
-  X
+  X,
+  LogOut
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { INITIAL_PROPERTIES } from "./data";
 import { Property, Review } from "./types";
 import { geocodeAddress } from "./utils/geocode";
-import { loadFromStorage, removeFromStorage, saveToStorage } from "./utils/storage";
-import { normalizeProperty, recalculatePropertyScores } from "./utils/propertyScoring";
+import { loadFromStorage, removeFromStorage } from "./utils/storage";
+import { normalizeProperty } from "./utils/propertyScoring";
+import { useProperties } from "./utils/useProperties";
+import { isRemoteBackendAvailable, getCurrentUser, signOut } from "./utils/supabase";
+import { AuthModal, UserMenu } from "./components/AuthModal";
 import HomeTab from "./components/HomeTab";
 import SearchTab from "./components/SearchTab";
 import MapTab from "./components/MapTab";
@@ -33,59 +37,77 @@ import ReviewModal from "./components/ReviewModal";
 const PROPERTIES_STORAGE_KEY = "chivato_properties_v2";
 
 export default function App() {
-  const [properties, setProperties] = useState<Property[]>(() =>
-    loadFromStorage<Property[]>(PROPERTIES_STORAGE_KEY, INITIAL_PROPERTIES).map(normalizeProperty)
-  );
-  const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
-  const [currentTab, setCurrentTab] = useState<number>(1); // 1 is 'Buscar' as active in screenshot
-  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
-  const [isNewPropertyModalOpen, setIsNewPropertyModalOpen] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem("theme") === "dark");
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  const [favorites, setFavorites] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem("favorites");
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
-  });
-
-  const toggleFavorite = (id: string) => {
-    setFavorites((prev) => {
-      const updated = prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id];
-      localStorage.setItem("favorites", JSON.stringify(updated));
-      return updated;
-    });
-  };
-
-  const [recentSearchesIds, setRecentSearchesIds] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem("recent_searches");
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
-  });
-
+  // Forward declare addToRecentSearches for hook
   const addToRecentSearches = (id: string) => {
     setRecentSearchesIds((prev) => {
       const filtered = prev.filter((item) => item !== id);
-      const updated = [id, ...filtered].slice(0, 5); // Keep last 5 unique
+      const updated = [id, ...filtered].slice(0, 5);
       localStorage.setItem("recent_searches", JSON.stringify(updated));
       return updated;
     });
   };
 
-  const clearRecentSearches = () => {
-    setRecentSearchesIds([]);
-    localStorage.removeItem("recent_searches");
-  };
+  // Core state management using the new hook
+  const {
+    properties,
+    selectedProperty,
+    isLoading,
+    error: syncError,
+    selectProperty,
+    clearSelection,
+    addReview,
+    addProperty,
+    reportReview: reportReviewRemote,
+    refresh,
+  } = useProperties(INITIAL_PROPERTIES, addToRecentSearches);
 
+  // UI state
+  const [currentTab, setCurrentTab] = useState<number>(1);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [isNewPropertyModalOpen, setIsNewPropertyModalOpen] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem("theme") === "dark");
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
 
-  React.useEffect(() => {
+  // Auth state
+  const [user, setUser] = useState<any>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+
+  // Local favorites
+  const [favorites, setFavorites] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem("favorites");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [newPropError, setNewPropError] = useState("");
+
+  // Update recent searches state
+  const [recentSearchesIds, setRecentSearchesIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem("recent_searches");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Initialize auth
+  useEffect(() => {
+    const checkAuth = async () => {
+      if (isRemoteBackendAvailable()) {
+        const currentUser = await getCurrentUser();
+        setUser(currentUser);
+      }
+    };
+    checkAuth();
+  }, []);
+
+  // Sync theme
+  useEffect(() => {
     if (isDarkMode) {
       document.documentElement.classList.add("dark");
       localStorage.setItem("theme", "dark");
@@ -95,157 +117,79 @@ export default function App() {
     }
   }, [isDarkMode]);
 
-  useEffect(() => {
-    saveToStorage(PROPERTIES_STORAGE_KEY, properties);
-  }, [properties]);
-
-  useEffect(() => {
-    setSelectedProperty((current) =>
-      current ? properties.find((property) => property.id === current.id) ?? null : null
-    );
-  }, [properties]);
-
-  // New property form state
-  const [newPropAddress, setNewPropAddress] = useState("");
-  const [newPropFlat, setNewPropFlat] = useState("");
-  const [newPropDistrict, setNewPropDistrict] = useState("");
-  const [newPropCity, setNewPropCity] = useState("");
-  const [newPropError, setNewPropError] = useState("");
-
-  const handleSelectProperty = (property: Property) => {
-    // Find live state property to avoid state desync
-    const liveProp = properties.find((p) => p.id === property.id);
-    if (liveProp) {
-      setSelectedProperty(liveProp);
-      addToRecentSearches(liveProp.id);
-    }
+  const toggleFavorite = (id: string) => {
+    setFavorites((prev) => {
+      const updated = prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id];
+      localStorage.setItem("favorites", JSON.stringify(updated));
+      return updated;
+    });
   };
 
-  const handleAddReviewSubmit = (
+  const clearRecentSearches = () => {
+    setRecentSearchesIds([]);
+    localStorage.removeItem("recent_searches");
+  };
+
+  const handleSelectProperty = (property: Property) => {
+    selectProperty(property);
+  };
+
+  const handleAddReviewSubmit = async (
     propertyId: string,
     newReview: Review,
     categoryRatings: { casero: number; mantenimiento: number; vecindad: number },
     newAlertText?: string
   ) => {
-    const updatedProperties = properties.map((prop) => {
-      if (prop.id !== propertyId) return prop;
-
-      const enrichedReview: Review = {
-        ...newReview,
-        rating: Number(((categoryRatings.casero + categoryRatings.mantenimiento + categoryRatings.vecindad) / 3).toFixed(1)),
-        propertyId: prop.id,
-        propertyAddress: prop.address,
-        propertyDistrict: prop.district,
-        ratingsBreakdown: categoryRatings
-      };
-
-      const reviewPhotos = enrichedReview.photos ?? [];
-      const updatedGallery = [
-        ...reviewPhotos.map((url, index) => ({
-          url,
-          caption: `Foto aportada en reseña ${index + 1}`
-        })),
-        ...prop.gallery
-      ];
-
-      const updatedAlerts = [...prop.alerts];
-      if (newAlertText) {
-        updatedAlerts.push({
-          id: `alert-${Date.now()}`,
-          title: enrichedReview.tags.includes("Problemas de humedad")
-            ? "Reporte de humedades"
-            : enrichedReview.tags.includes("Retención de fianza")
-            ? "Conflicto por fianza"
-            : "Reporte de ruido extremo",
-          description: newAlertText,
-          severity: "high"
-        });
-      }
-
-      return recalculatePropertyScores({
-        ...prop,
-        reviews: [enrichedReview, ...prop.reviews],
-        gallery: updatedGallery,
-        alerts: updatedAlerts
-      });
-    });
-
-    setProperties(updatedProperties);
+    try {
+      await addReview(propertyId, newReview, categoryRatings, newAlertText);
+      setIsReviewModalOpen(false);
+    } catch (err) {
+      console.error("Error adding review:", err);
+    }
   };
 
-  const handleReportReview = (propertyId: string, reviewId: string) => {
-    setProperties((currentProperties) =>
-      currentProperties.map((prop) => {
-        if (prop.id !== propertyId) return prop;
-
-        return {
-          ...prop,
-          reviews: prop.reviews.map((review) =>
-            review.id === reviewId
-              ? {
-                  ...review,
-                  moderationStatus: "reported",
-                  reportCount: (review.reportCount ?? 0) + 1
-                }
-              : review
-          )
-        };
-      })
-    );
+  const handleReportReview = async (propertyId: string, reviewId: string) => {
+    try {
+      await reportReviewRemote(propertyId, reviewId);
+    } catch (err) {
+      console.error("Error reporting review:", err);
+    }
   };
 
   const resetDemoData = () => {
     removeFromStorage(PROPERTIES_STORAGE_KEY);
-    const resetProperties = INITIAL_PROPERTIES.map(normalizeProperty);
-    setProperties(resetProperties);
-    setSelectedProperty(null);
-    setRecentSearchesIds([]);
-    localStorage.removeItem("recent_searches");
+    location.reload();
   };
 
   const handleCreatePropertySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newPropAddress.trim() || !newPropFlat.trim() || !newPropDistrict.trim() || !newPropCity.trim()) {
-      setNewPropError("Por favor rellena todos los campos (dirección, piso, zona y ciudad).");
+    const formData = new FormData(e.target as HTMLFormElement);
+    const address = formData.get("address") as string;
+    const flat = formData.get("flat") as string;
+    const district = formData.get("district") as string;
+    const city = formData.get("city") as string;
+
+    if (!address.trim() || !flat.trim() || !district.trim() || !city.trim()) {
+      setNewPropError("Por favor rellena todos los campos");
       return;
     }
 
-    const newId = "prop-" + Date.now();
-    const newProp: Property = {
-      id: newId,
-      address: `${newPropAddress}, ${newPropFlat}`,
-      flat: newPropFlat,
-      district: newPropDistrict,
-      city: newPropCity,
-      overallRating: 0,
-      ratingsBreakdown: {
-        casero: 0,
-        mantenimiento: 0,
-        vecindad: 0
-      },
-      coords: await geocodeAddress(newPropAddress, newPropDistrict, newPropCity),
-      alerts: [],
-      gallery: [
-        {
-          url: "https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&q=80&w=600",
-          caption: "Entrada del edificio"
-        }
-      ],
-      reviews: []
-    };
+    try {
+      const coords = await geocodeAddress(address, district, city);
+      await addProperty(address, flat, district, city, coords);
+      setIsNewPropertyModalOpen(false);
+      setNewPropError("");
+      // Reset form
+      (e.target as HTMLFormElement).reset();
+    } catch (err) {
+      console.error("Error creating property:", err);
+      setNewPropError("No se pudo registrar la vivienda");
+    }
+  };
 
-    const updatedProperties = [...properties, newProp];
-    setProperties(updatedProperties);
-    setSelectedProperty(newProp);
-    addToRecentSearches(newId);
-    setIsNewPropertyModalOpen(false);
-
-    // Reset Form
-    setNewPropAddress("");
-    setNewPropFlat("");
-    setNewPropDistrict("");
-    setNewPropCity("");
-    setNewPropError("");
+  const handleLogout = async () => {
+    await signOut();
+    setUser(null);
   };
 
   const renderActiveTabContent = () => {
@@ -261,7 +205,6 @@ export default function App() {
             onSelectProperty={handleSelectProperty}
             onNavigateToTab={(tabIdx) => {
               setCurrentTab(tabIdx);
-              setSelectedProperty(null);
             }}
           />
         );
@@ -298,7 +241,7 @@ export default function App() {
       ...alert,
       propertyAddress: p.address,
       propertyId: p.id,
-      property: p
+      property: p,
     }))
   );
 
@@ -313,7 +256,7 @@ export default function App() {
             
             {/* Brand Logo & Name */}
             <div 
-              onClick={() => { setCurrentTab(0); setSelectedProperty(null); }}
+              onClick={() => { setCurrentTab(0); clearSelection(); }}
               className="flex items-center gap-2 cursor-pointer active:scale-95 transition-transform"
             >
               <span className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center border-2 border-black bg-[#fea619]/10">
@@ -332,7 +275,7 @@ export default function App() {
             {/* Desktop Navigation (visible on >= 768px tablet & desktop) */}
             <nav className="hidden md:flex items-center gap-2">
               <button
-                onClick={() => { setCurrentTab(0); setSelectedProperty(null); }}
+                onClick={() => { setCurrentTab(0); clearSelection(); }}
                 className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all border-2 border-black ${
                   currentTab === 0 ? "bg-[#ffd100] text-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" : "bg-white dark:bg-slate-800 text-black dark:text-white hover:bg-slate-100"
                 }`}
@@ -340,7 +283,7 @@ export default function App() {
                 Inicio
               </button>
               <button
-                onClick={() => { setCurrentTab(1); setSelectedProperty(null); }}
+                onClick={() => { setCurrentTab(1); clearSelection(); }}
                 className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all border-2 border-black ${
                   currentTab === 1 ? "bg-[#ffd100] text-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" : "bg-white dark:bg-slate-800 text-black dark:text-white hover:bg-slate-100"
                 }`}
@@ -348,7 +291,7 @@ export default function App() {
                 Buscar
               </button>
               <button
-                onClick={() => { setCurrentTab(2); setSelectedProperty(null); }}
+                onClick={() => { setCurrentTab(2); clearSelection(); }}
                 className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all border-2 border-black ${
                   currentTab === 2 ? "bg-[#ffd100] text-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" : "bg-white dark:bg-slate-800 text-black dark:text-white hover:bg-slate-100"
                 }`}
@@ -374,7 +317,7 @@ export default function App() {
                 Reset demo
               </button>
               <button
-                onClick={() => { setCurrentTab(4); setSelectedProperty(null); }}
+                onClick={() => { setCurrentTab(4); clearSelection(); }}
                 className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all border-2 border-black ${
                   currentTab === 4 ? "bg-[#ffd100] text-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" : "bg-white dark:bg-slate-800 text-black dark:text-white hover:bg-slate-100"
                 }`}
@@ -385,6 +328,27 @@ export default function App() {
             
             {/* Action Buttons Container */}
             <div className="flex items-center gap-1 z-30">
+              {/* Auth Button */}
+              {isRemoteBackendAvailable() && (
+                <button
+                  onClick={() => (user ? handleLogout() : setIsAuthModalOpen(true))}
+                  className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider border-2 border-black transition-all"
+                  title={user ? "Cerrar sesión" : "Iniciar sesión"}
+                >
+                  {user ? (
+                    <>
+                      <LogOut className="w-4 h-4" />
+                      Salir
+                    </>
+                  ) : (
+                    <>
+                      <Shield className="w-4 h-4" />
+                      Entrar
+                    </>
+                  )}
+                </button>
+              )}
+
               {/* Theme Toggle Button */}
               <button
                 onClick={() => setIsDarkMode(!isDarkMode)}
@@ -447,7 +411,7 @@ export default function App() {
                             <div
                               key={alert.id}
                               onClick={() => {
-                                setSelectedProperty(alert.property);
+                                selectProperty(alert.property);
                                 setIsNotificationsOpen(false);
                               }}
                               className="p-3 bg-red-50 dark:bg-red-950/20 hover:bg-[#ffd100]/20 dark:hover:bg-amber-950/20 rounded-xl border-2 border-black dark:border-slate-800 transition cursor-pointer"
@@ -533,7 +497,7 @@ export default function App() {
                     <button
                       onClick={() => {
                         setCurrentTab(0);
-                        setSelectedProperty(null);
+                        clearSelection();
                         setIsMobileMenuOpen(false);
                       }}
                       className={`w-full text-left py-3 px-4 rounded-xl font-black text-sm uppercase tracking-wide border-2 border-black transition-all flex items-center gap-3 ${
@@ -547,7 +511,7 @@ export default function App() {
                     <button
                       onClick={() => {
                         setCurrentTab(1);
-                        setSelectedProperty(null);
+                        clearSelection();
                         setIsMobileMenuOpen(false);
                       }}
                       className={`w-full text-left py-3 px-4 rounded-xl font-black text-sm uppercase tracking-wide border-2 border-black transition-all flex items-center gap-3 ${
@@ -561,7 +525,7 @@ export default function App() {
                     <button
                       onClick={() => {
                         setCurrentTab(2);
-                        setSelectedProperty(null);
+                        clearSelection();
                         setIsMobileMenuOpen(false);
                       }}
                       className={`w-full text-left py-3 px-4 rounded-xl font-black text-sm uppercase tracking-wide border-2 border-black transition-all flex items-center gap-3 ${
@@ -597,7 +561,7 @@ export default function App() {
                     <button
                       onClick={() => {
                         setCurrentTab(4);
-                        setSelectedProperty(null);
+                          clearSelection();
                         setIsMobileMenuOpen(false);
                       }}
                       className={`w-full text-left py-3 px-4 rounded-xl font-black text-sm uppercase tracking-wide border-2 border-black transition-all flex items-center gap-3 ${
@@ -626,7 +590,7 @@ export default function App() {
             <div className="flex-1 overflow-y-auto">
               <PropertyDetail
                 property={selectedProperty}
-                onBack={() => setSelectedProperty(null)}
+                onBack={() => clearSelection()}
                 onAddReviewClick={() => setIsReviewModalOpen(true)}
                 isBookmarked={favorites.includes(selectedProperty.id)}
                 onToggleBookmark={() => toggleFavorite(selectedProperty.id)}
@@ -669,7 +633,7 @@ export default function App() {
           <button
             onClick={() => {
               setCurrentTab(0);
-              setSelectedProperty(null);
+              clearSelection();
             }}
             className={`flex flex-col items-center justify-center flex-1 transition ${
               currentTab === 0 && !selectedProperty ? "text-[#0b1c30] dark:text-[#ffd100]" : "text-slate-400 dark:text-slate-500 hover:text-[#0b1c30] dark:hover:text-white"
@@ -683,7 +647,7 @@ export default function App() {
           <button
             onClick={() => {
               setCurrentTab(1);
-              setSelectedProperty(null);
+              clearSelection();
             }}
             className="flex flex-col items-center justify-center flex-1 relative"
           >
@@ -706,7 +670,7 @@ export default function App() {
           <button
             onClick={() => {
               setCurrentTab(2);
-              setSelectedProperty(null);
+              clearSelection();
             }}
             className={`flex flex-col items-center justify-center flex-1 transition ${
               currentTab === 2 && !selectedProperty ? "text-[#0b1c30] dark:text-[#ffd100]" : "text-slate-400 dark:text-slate-500 hover:text-[#0b1c30] dark:hover:text-white"
@@ -733,6 +697,17 @@ export default function App() {
           property={selectedProperty}
           propertiesList={properties}
           onSubmit={handleAddReviewSubmit}
+        />
+
+        {/* Auth Modal */}
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          onClose={() => setIsAuthModalOpen(false)}
+          onAuthSuccess={() => {
+            setIsAuthModalOpen(false);
+            // Refresh properties after auth
+            refresh();
+          }}
         />
 
         {/* Create New Property Modal */}
@@ -769,12 +744,10 @@ export default function App() {
                       Calle / Vía Pública
                     </label>
                     <input
-                      id="new-prop-address-input"
+                      name="address"
                       type="text"
                       required
                       placeholder="Ej. Calle de Serrano, 88"
-                      value={newPropAddress}
-                      onChange={(e) => setNewPropAddress(e.target.value)}
                       className="w-full p-2 border border-slate-300 rounded-lg text-xs font-medium focus:outline-none focus:border-[#3980f4]"
                     />
                   </div>
@@ -785,12 +758,10 @@ export default function App() {
                         PISO Y PUERTA
                       </label>
                       <input
-                        id="new-prop-flat-input"
+                        name="flat"
                         type="text"
                         required
                         placeholder="Ej. 2º Izq"
-                        value={newPropFlat}
-                        onChange={(e) => setNewPropFlat(e.target.value)}
                         className="w-full p-2 border-2 border-black rounded-lg text-xs font-black uppercase bg-slate-50 focus:outline-none focus:bg-[#ffd100] transition-colors"
                       />
                     </div>
@@ -799,12 +770,10 @@ export default function App() {
                         ZONA / BARRIO
                       </label>
                       <input
-                        id="new-prop-district-input"
+                        name="district"
                         type="text"
                         required
                         placeholder="Ej. Centro"
-                        value={newPropDistrict}
-                        onChange={(e) => setNewPropDistrict(e.target.value)}
                         className="w-full p-2 border-2 border-black rounded-lg text-xs font-black uppercase bg-slate-50 focus:outline-none focus:bg-[#ffd100] transition-colors"
                       />
                     </div>
@@ -815,19 +784,16 @@ export default function App() {
                       CIUDAD
                     </label>
                     <input
-                      id="new-prop-city-input"
+                      name="city"
                       type="text"
                       required
                       placeholder="Ej. Barcelona"
-                      value={newPropCity}
-                      onChange={(e) => setNewPropCity(e.target.value)}
                       className="w-full p-2 border-2 border-black rounded-lg text-xs font-black uppercase bg-slate-50 focus:outline-none focus:bg-[#ffd100] transition-colors"
                     />
                   </div>
 
                   <button
                     type="submit"
-                    id="submit-new-prop-btn"
                     className="w-full py-3 bg-black text-[#ffd100] text-sm font-black uppercase rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-y-[4px] active:shadow-none transition-all mt-2"
                   >
                     CREAR Y EVALUAR

@@ -4,29 +4,35 @@ MVP frontend para consultar y publicar reseñas de viviendas de alquiler. La app
 
 ## Estado del proyecto
 
-Esta versión es un MVP local. Funciona sin backend usando `localStorage`, por lo que los datos se guardan en el navegador del usuario. Para producción hay que conectar Supabase/Firebase o un backend propio.
+Esta versión es un **MVP local escalable a producción**. 
+
+- **Modo demo:** Funciona sin backend usando `localStorage`, los datos se guardan en el navegador.
+- **Modo producción:** Conectado a Supabase con autenticación, persistencia remota, moderación y almacenamiento de fotos.
 
 ## Cambios incluidos
 
-- Nombre del proyecto cambiado a `chivato`.
-- Limpieza de dependencias no usadas de AI Studio/Gemini/Express.
-- Imágenes movidas a `public/images` para que funcionen en build.
-- Persistencia local de viviendas, reseñas, fotos, favoritos e historial reciente.
+- Nombre del proyecto `chivato`.
+- Integración opcional con Supabase (backend remoto).
+- Autenticación de usuarios con email/contraseña.
+- Persistencia en Supabase + fallback a localStorage.
 - Búsqueda de viviendas aunque no tengan reseñas.
-- Búsqueda por dirección, barrio, ciudad, alertas, etiquetas y contenido de reseñas.
+- Búsqueda por dirección, barrio, ciudad, alertas, etiquetas y contenido.
 - Mapa filtrable por texto.
-- Geocoding con OpenStreetMap Nominatim y fallback local por ciudad.
-- Puntuaciones recalculadas desde las reseñas reales.
+- Geocoding con OpenStreetMap Nominatim.
+- Puntuaciones dinámicas desde reseñas.
 - Estados de verificación y moderación en reseñas.
 - Botón de reporte de reseñas.
-- Separación de chunks en Vite para evitar bundles excesivos.
-- Esquema SQL inicial para Supabase en `supabase/schema.sql`.
-- Documento de criterios de moderación y privacidad en `docs/moderation-and-privacy.md`.
+- Separación de chunks en Vite.
+- Esquema SQL completo para Supabase en `supabase/schema.sql`.
+- Documento de criterios de moderación en `docs/moderation-and-privacy.md`.
+- Componente de autenticación con login/signup.
+- Hook `useProperties` para centralizar lógica de estado.
 
 ## Requisitos
 
 - Node.js 20 o superior recomendado.
 - npm.
+- (Opcional para producción) Proyecto en Supabase.
 
 ## Instalación
 
@@ -34,7 +40,7 @@ Esta versión es un MVP local. Funciona sin backend usando `localStorage`, por l
 npm install
 ```
 
-## Desarrollo
+## Desarrollo (Modo Local)
 
 ```bash
 npm run dev
@@ -46,6 +52,55 @@ La app arranca por defecto en:
 http://localhost:3000
 ```
 
+## Producción con Supabase
+
+### 1. Crear proyecto en Supabase
+
+1. Ir a [supabase.com](https://supabase.com) y crear un proyecto nuevo.
+2. Copiar la URL del proyecto y la clave anónima (API key).
+
+### 2. Configurar variables de entorno
+
+Crea un archivo `.env.local` en la raíz del proyecto:
+
+```env
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key-here
+VITE_USE_REMOTE_BACKEND=true
+```
+
+### 3. Crear el schema en Supabase
+
+1. Abre el SQL Editor en tu dashboard de Supabase.
+2. Copia el contenido de `supabase/schema.sql` y ejecuta en el editor.
+3. Configura Storage:
+   - Crea un bucket llamado `review-photos`.
+   - Habilita acceso público a las fotos.
+
+### 4. Configurar Storage para fotos
+
+En Supabase Dashboard → Storage:
+
+1. Crea un bucket llamado `review-photos`.
+2. En Policies, permite:
+   - SELECT (lectura pública)
+   - INSERT/UPDATE para usuarios autenticados
+
+### 5. Instalar dependencias con Supabase
+
+```bash
+npm install @supabase/supabase-js
+```
+
+### 6. Build y deploy
+
+```bash
+npm run build
+npm run preview
+```
+
+Desplega a Vercel, Netlify o tu servidor preferido.
+
 ## Validación
 
 ```bash
@@ -53,16 +108,9 @@ npm run lint
 npm run build
 ```
 
-## Producción
+## Persistencia
 
-```bash
-npm run build
-npm run preview
-```
-
-## Persistencia actual
-
-La versión actual guarda datos en:
+### Modo Local (Demo)
 
 ```text
 localStorage: chivato_properties_v2
@@ -73,25 +121,49 @@ localStorage: theme
 
 El botón `Reset demo` restaura los datos iniciales.
 
-## Backend recomendado
+### Modo Producción (Supabase)
 
-Para pasar de MVP a app real:
+- Base de datos PostgreSQL en Supabase
+- Autenticación de usuarios
+- Almacenamiento de fotos en Supabase Storage
+- Historial de cambios mediante triggers
 
-1. Crear proyecto en Supabase.
-2. Ejecutar `supabase/schema.sql`.
-3. Crear buckets de Storage para fotos de reseñas.
-4. Añadir autenticación.
-5. Sustituir el almacenamiento local por llamadas a Supabase.
-6. Añadir políticas RLS.
-7. Crear panel de moderación.
+## Flujo de autenticación
 
-Variables preparadas en `.env.example`:
+1. Usuario se registra con email/contraseña (solo si Supabase está configurado).
+2. Inicia sesión para guardar reseñas como usuario verificado.
+3. Los datos se sincronizan automáticamente con Supabase.
+4. Si Supabase no está disponible, la app funciona en modo local.
 
-```env
-VITE_SUPABASE_URL=
-VITE_SUPABASE_ANON_KEY=
-```
+## Moderación
+
+Las reseñas tienen estados:
+
+- **pending:** Nueva reseña, pendiente de revisión.
+- **published:** Reseña pública.
+- **reported:** Reportada por usuarios.
+- **hidden:** Oculta por moderadores.
+
+Cuando una reseña recibe 3+ reportes, se marca como `reported` automáticamente.
+
+## Roadmap post-MVP
+
+1. ✅ Autenticación de usuarios
+2. ✅ Persistencia en Supabase
+3. ✅ Almacenamiento de fotos
+4. 🔄 Panel de moderación (admin)
+5. 🔄 Verificación de reseñas (email confirmation)
+6. 🔄 Notificaciones en tiempo real
+7. 🔄 Sistema de reputación de usuarios
+8. 🔄 API pública
 
 ## Advertencia legal/producto
 
-No publiques la app abierta al público sin moderación, términos de uso y política de privacidad. Las reseñas de viviendas pueden incluir contenido sensible o potencialmente difamatorio si no se controlan. Revisa `docs/moderation-and-privacy.md`.
+**No publiques la app al público sin:**
+
+- Moderación activa (panel admin)
+- Términos de uso y política de privacidad
+- Verificación de identidad de usuarios
+- Sistema de reportes y bloqueo de contenido
+
+Las reseñas de viviendas pueden incluir contenido sensible o potencialmente difamatorio. Revisa `docs/moderation-and-privacy.md` para políticas completas.

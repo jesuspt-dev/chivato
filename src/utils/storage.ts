@@ -18,8 +18,3 @@ export function saveToStorage<T>(key: string, value: T): void {
     console.warn(`No se pudo guardar ${key} en localStorage`, error);
   }
 }
-
-export function removeFromStorage(key: string): void {
-  if (typeof window === "undefined") return;
-  window.localStorage.removeItem(key);
-}

@@ -22,8 +22,6 @@ import { motion, AnimatePresence } from "motion/react";
 import { INITIAL_PROPERTIES } from "./data";
 import { Property, Review } from "./types";
 import { geocodeAddress } from "./utils/geocode";
-import { loadFromStorage, removeFromStorage } from "./utils/storage";
-import { normalizeProperty } from "./utils/propertyScoring";
 import { useProperties } from "./utils/useProperties";
 import { isRemoteBackendAvailable, getCurrentUser, signOut } from "./utils/supabase";
 import { AuthModal, UserMenu } from "./components/AuthModal";
@@ -34,8 +32,6 @@ import ProfileTab from "./components/ProfileTab";
 import PropertyDetail from "./components/PropertyDetail";
 import ReviewModal from "./components/ReviewModal";
 import { getAssetUrl } from "./utils/assets";
-
-const PROPERTIES_STORAGE_KEY = "chivato_properties_v2";
 
 export default function App() {
   // Forward declare addToRecentSearches for hook
@@ -155,11 +151,6 @@ export default function App() {
     } catch (err) {
       console.error("Error reporting review:", err);
     }
-  };
-
-  const resetDemoData = () => {
-    removeFromStorage(PROPERTIES_STORAGE_KEY);
-    location.reload();
   };
 
   const handleCreatePropertySubmit = async (e: React.FormEvent) => {
@@ -310,12 +301,6 @@ export default function App() {
                 className="px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all border-2 border-black bg-black text-[#ffd100] hover:bg-slate-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
               >
                 + Reseña
-              </button>
-              <button
-                onClick={resetDemoData}
-                className="px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all border-2 border-black bg-white dark:bg-slate-800 text-black dark:text-white hover:bg-slate-100"
-              >
-                Reset demo
               </button>
               <button
                 onClick={() => { setCurrentTab(4); clearSelection(); }}

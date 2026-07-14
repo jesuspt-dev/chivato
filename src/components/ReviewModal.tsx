@@ -505,7 +505,7 @@ export default function ReviewModal({
                   />
                   <div className="space-y-1">
                     <p className="text-xs font-bold text-slate-700 dark:text-slate-200">Arrastra fotos aquí o pulsa para subir</p>
-                    <p className="text-[10px] text-slate-400 dark:text-slate-400">Admite JPG, PNG. En esta demo se guardan localmente en el navegador</p>
+                    <p className="text-[10px] text-slate-400 dark:text-slate-400">Admite JPG y PNG. Las fotos se guardan localmente en el navegador para esta sesión.</p>
                   </div>
                 </div>
 

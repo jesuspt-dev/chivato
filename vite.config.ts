@@ -3,8 +3,13 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig} from 'vite';
 
-export default defineConfig(() => {
+const repoName = 'chivato';
+
+export default defineConfig(({ mode }) => {
+  const isProduction = mode === 'production';
+
   return {
+    base: isProduction ? `/${repoName}/` : '/',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {

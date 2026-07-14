@@ -1,6 +1,7 @@
 import React from "react";
 import { Flame, ShieldAlert, ArrowRight, Star, MapPin, Navigation } from "lucide-react";
 import { Property } from "../types";
+import { getAssetUrl } from "../utils/assets";
 
 interface HomeTabProps {
   properties: Property[];
@@ -31,7 +32,7 @@ export default function HomeTab({
           <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white dark:bg-slate-900 shrink-0">
             <img
               referrerPolicy="no-referrer"
-              src="/images/nuevo_logo.png"
+              src={getAssetUrl("images/nuevo_logo.png")}
               alt="Mascota chivato"
               className="w-full h-full object-cover"
             />

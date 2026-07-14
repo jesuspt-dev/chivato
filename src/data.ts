@@ -1,4 +1,5 @@
 import { Property } from "./types";
+import { getAssetUrl } from "./utils/assets";
 
 export const INITIAL_PROPERTIES: Property[] = [
   {
@@ -24,19 +25,19 @@ export const INITIAL_PROPERTIES: Property[] = [
     ],
     gallery: [
       {
-        url: "/images/bathroom_mould_1783253064111.jpg",
+        url: getAssetUrl("images/bathroom_mould_1783253064111.jpg"),
         caption: "Humedad baño (Ene 2023)"
       },
       {
-        url: "/images/broken_oven_1783253076646.jpg",
+        url: getAssetUrl("images/broken_oven_1783253076646.jpg"),
         caption: "Horno roto sin arreglar"
       },
       {
-        url: "/images/damaged_floor_1783253088429.jpg",
+        url: getAssetUrl("images/damaged_floor_1783253088429.jpg"),
         caption: "Parqué levantado en salón"
       },
       {
-        url: "/images/peeling_window_1783253100627.jpg",
+        url: getAssetUrl("images/peeling_window_1783253100627.jpg"),
         caption: "Marco ventana podrido"
       },
       {
@@ -62,7 +63,7 @@ export const INITIAL_PROPERTIES: Property[] = [
         tags: ["Tranquilo", "Problemas de humedad", "Casero ausente"],
         verified: true,
         date: "15 Feb 2023",
-        photos: ["/images/bathroom_mould_1783253064111.jpg", "/images/damaged_floor_1783253088429.jpg"],
+        photos: [getAssetUrl("images/bathroom_mould_1783253064111.jpg"), getAssetUrl("images/damaged_floor_1783253088429.jpg")],
         ratingsBreakdown: { casero: 1.0, mantenimiento: 1.5, vecindad: 4.5 }
       },
       {
@@ -98,7 +99,7 @@ export const INITIAL_PROPERTIES: Property[] = [
         tags: ["Tranquilo", "Buenas vistas"],
         verified: true,
         date: "28 Ene 2017",
-        photos: ["/images/broken_oven_1783253076646.jpg", "/images/peeling_window_1783253100627.jpg"],
+        photos: [getAssetUrl("images/broken_oven_1783253076646.jpg"), getAssetUrl("images/peeling_window_1783253100627.jpg")],
         ratingsBreakdown: { casero: 1.5, mantenimiento: 2.0, vecindad: 4.8 }
       }
     ]

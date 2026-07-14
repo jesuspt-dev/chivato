@@ -447,19 +447,19 @@ export default function ReviewModal({
                   {[
                     {
                       label: "Moho en Baño 🍄",
-                      url: "/images/bathroom_mould_1783253064111.jpg"
+                      url: getAssetUrl("images/bathroom_mould_1783253064111.jpg")
                     },
                     {
                       label: "Horno Roto 🍳",
-                      url: "/images/broken_oven_1783253076646.jpg"
+                      url: getAssetUrl("images/broken_oven_1783253076646.jpg")
                     },
                     {
                       label: "Parqué Dañado 🪵",
-                      url: "/images/damaged_floor_1783253088429.jpg"
+                      url: getAssetUrl("images/damaged_floor_1783253088429.jpg")
                     },
                     {
                       label: "Ventana Podrida 🪟",
-                      url: "/images/peeling_window_1783253100627.jpg"
+                      url: getAssetUrl("images/peeling_window_1783253100627.jpg")
                     }
                   ].map((preset) => {
                     const isSelected = uploadedPhotos.includes(preset.url);

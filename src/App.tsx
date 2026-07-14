@@ -33,6 +33,7 @@ import MapTab from "./components/MapTab";
 import ProfileTab from "./components/ProfileTab";
 import PropertyDetail from "./components/PropertyDetail";
 import ReviewModal from "./components/ReviewModal";
+import { getAssetUrl } from "./utils/assets";
 
 const PROPERTIES_STORAGE_KEY = "chivato_properties_v2";
 
@@ -262,7 +263,7 @@ export default function App() {
               <span className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center border-2 border-black bg-[#fea619]/10">
                 <img
                   referrerPolicy="no-referrer"
-                  src="/images/nuevo_logo.png"
+                  src={getAssetUrl("images/nuevo_logo.png")}
                   alt="chivato logo"
                   className="w-full h-full object-cover"
                 />
@@ -475,7 +476,7 @@ export default function App() {
                       <span className="w-8 h-8 rounded-xl overflow-hidden flex items-center justify-center border-2 border-black bg-[#fea619]/10">
                         <img
                           referrerPolicy="no-referrer"
-                          src="/images/nuevo_logo.png"
+                          src={getAssetUrl("images/nuevo_logo.png")}
                           alt="chivato logo"
                           className="w-full h-full object-cover"
                         />
